@@ -10,6 +10,10 @@ Experimental NVIDIA GPU clock controls with large text, high-contrast checkboxes
 
 The early results are encouraging: the owner reported success with a fixed 1,800 MHz request, and a later adaptive training run returned to low-power idle afterwards. These are observations from one laptop, not a guaranteed fix for other machines.
 
+![Goblin Governor with large high-contrast controls, an adaptive 300–2200 MHz request, and live idle readings of 292 MHz, 38°C and about 4 W.](docs/images/goblin-governor-adaptive.png)
+
+*Example from the original tester's configured laptop: adaptive 300–2200 MHz, with startup enabled after manual confirmation. Fresh installs have startup OFF and no confirmed profile. Requested limits and live clock readings are different; this screenshot shows the GPU idling at 292 MHz.*
+
 ### From frustration to experimentation
 
 The owner described crashes during video rendering, AI work and graphics benchmarks, sometimes before a benchmark properly started. Previous Windows crash diagnostics identified repeated **VIDEO_TDR_FAILURE (0x116)** errors involving **nvlddmkm.sys**, NVIDIA's Windows driver. Those diagnostics identify the failure path; they do not establish whether the underlying cause is hardware, firmware, the driver or a combination.
