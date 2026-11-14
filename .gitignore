@@ -1,0 +1,22 @@
+# Never publish runtime state, identifiers, certificates or generated binaries
+state/
+**/state/
+.test-runs/
+dist/
+*.exe
+*.dll
+*.pdb
+*.zip
+*.log
+*.csv
+*.cer
+*.pfx
+*.p12
+*.pem
+*.key
+certificate-thumbprint.txt
+probe.txt
+preview.png
+test-results.txt
+before-*/
+.vs/
