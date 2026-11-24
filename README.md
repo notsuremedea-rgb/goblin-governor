@@ -122,6 +122,14 @@ The unchecked state has an orange outline; selected controls have a large green 
 
 Details are recorded in `state\actions.log` inside the app folder.
 
+## Updating to v0.1.1
+
+This release fixes a normal Windows restart/sign-out incorrectly triggering the recovery pause. Close Governor normally before replacing files. Extract the new package into the same folder to retain your private `state` folder and the existing startup-task path. Do not copy state between different computers.
+
+If startup was already paused, the update deliberately leaves that pause intact. Apply and test your intended profile, confirm it, then enable Start with Windows. Successful cleanup during a normal restart now preserves the startup preference. Failed or timed-out cleanup still pauses automatic reapplication.
+
+Validation: 39 fake-GPU checks passed, including Windows shutdown/cancellation messages, bounded cleanup, and watchdog recovery. The original tester also reported a successful real Windows restart with the fix on 24 November 2026. This is a single-machine confirmation, not a general stability guarantee.
+
 ## Recovery behaviour
 
 Before changing GPU settings, Governor records which controls it owns. Its separate watchdog waits for the app process. After an abnormal exit with pending settings, it attempts to restore those controls and pauses startup; it never reapplies the profile. Successful recovery clears the pending recovery record but leaves startup paused for manual review.
@@ -156,7 +164,7 @@ The original tester supplied the telemetry and action log for these observations
 
 ## Software validation and technical notes
 
-31 mock/isolated-process checks passed, covering unchanged fixed 1800/1800 behaviour, six adaptive ranges, bounds validation, delayed/unavailable readiness, one attempt per sign-in, corrupt and unverified profiles, cancellation, rejected writes and recovery after abrupt/clean exits. The actual watchdog process was exercised with a fake GPU; no actual GPU crash was required. The real read-only readiness probe also passed at delivery. Run `test.ps1` to reproduce the checks; generated results stay in ignored `.test-runs` folders.
+39 mock/isolated-process checks passed, covering unchanged fixed 1800/1800 behaviour, six adaptive ranges, bounds validation, delayed/unavailable readiness, one attempt per sign-in, corrupt and unverified profiles, cancellation, rejected writes and recovery after abrupt/clean exits. The actual watchdog process was exercised with a fake GPU; no actual GPU crash was required. The real read-only readiness probe also passed at delivery. Run `test.ps1` to reproduce the checks; generated results stay in ignored `.test-runs` folders.
 
 Startup uses a per-user highest-privilege Windows logon task with no automatic restart-on-failure loop. Only `state\verified-startup.txt` is eligible for automatic application; `profile.txt` alone is not sufficient. The confirmation record includes the exact profile and GPU UUID. Do not hand-edit these files to bypass confirmation.
 

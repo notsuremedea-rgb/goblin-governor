@@ -73,6 +73,23 @@ public sealed class MainForm:Form {
   else Shown+=async delegate{await Initialize(autorun);};
   FormClosing+=async delegate(object sender,FormClosingEventArgs e){if(closing)return;e.Cancel=true;if(busy||sampling){detail.Text="Wait for the current operation to finish.";return;}monitor.Stop();await ResetNow(false);if(File.Exists(Files.Journal)){detail.Text="Reset not verified. The recovery helper will retry after exit.";}closing=true;health.Stop();Close();};
  }
+ protected override void WndProc(ref Message m){
+  // Do not enter the async FormClosing path while Windows is ending a session.
+  // Query is only a proposal: another application can still cancel shutdown.
+  if(m.Msg==0x11){m.Result=new IntPtr(1);return;}
+  if(m.Msg==0x16){
+   if(m.WParam!=IntPtr.Zero){
+    monitor.Stop();health.Stop();cancelStartup=true;closing=true;
+    SessionShutdown.Finish(busy||sampling,()=>{
+     if(File.Exists(Files.Journal)&&gpu==null)throw new Exception("GPU unavailable during shutdown reset.");
+     ResetOwned();
+    },why=>StartupPolicy.Block(StartupPolicy.Store,why));
+   }
+   // FALSE means cancelled: leave the live app and ownership untouched.
+   if(m.WParam==IntPtr.Zero){m.Result=IntPtr.Zero;return;}
+  }
+  base.WndProc(ref m);
+ }
  Label Label(string text,int size,FontStyle style){return new Label{Text=text,Dock=DockStyle.Fill,Font=new Font("Segoe UI",size,style),ForeColor=ForeColor,TextAlign=ContentAlignment.MiddleLeft};}
  Button Button(string text,Color color){return new Button{Text=text,Width=210,Height=56,Margin=new Padding(0,5,14,5),BackColor=color,ForeColor=Color.FromArgb(15,20,25),FlatStyle=FlatStyle.Flat,Font=new Font("Segoe UI",16,FontStyle.Bold)};}
  Control Row(string title,int min,int max,int val,string unit,out CheckBox check,out NumericUpDown number,out Label reading){

@@ -62,6 +62,31 @@ class Tests {
   Check(File.Exists(Files.PathFor("fake-reset.txt"))&&!File.Exists(Files.Journal),"real watchdog resets fake GPU after owner failure");
   Check(File.Exists(Files.PathFor("startup-paused.txt")),"watchdog leaves persistent no-reapply latch");
   File.Delete(Files.PathFor("startup-paused.txt"));File.Delete(Files.PathFor("fake-reset.txt"));using(Process owner=Process.Start(new ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location,"--owner-clean"){UseShellExecute=false,CreateNoWindow=true})){Check(owner.WaitForExit(10000)&&owner.ExitCode==0,"clean shutdown resets normally");}Thread.Sleep(500);Check(!File.Exists(Files.Journal)&&!File.Exists(Files.PathFor("startup-paused.txt")),"clean shutdown does not create recovery/reapply loop");
+  s=Enabled();g=new FakeGpu();Files.Write("recovery.txt","shutdown|GPU-fake|8");
+  bool clean=SessionShutdown.Finish(false,()=>{ControlLogic.Reset(g,8);File.Delete(Files.Journal);},why=>StartupPolicy.Block(s,why));
+  Check(clean&&g.UnlockCalls==1&&!File.Exists(Files.Journal)&&s.Read("startup-paused.txt")==null&&s.Read("startup.enabled")!=null,"confirmed Windows shutdown resets synchronously and preserves startup");
+  applies=0;result=StartupPolicy.Run(s,"after-restart",false,p=>true,p=>applies++,()=>{},2);
+  Check(result.Applied&&applies==1,"clean Windows restart permits confirmed profile exactly once");
+  s=Enabled();g=new FakeGpu{ResetFailure=true};Files.Write("recovery.txt","shutdown|GPU-fake|8");
+  clean=SessionShutdown.Finish(false,()=>{ControlLogic.Reset(g,8);File.Delete(Files.Journal);},why=>StartupPolicy.Block(s,why));
+  Check(!clean&&File.Exists(Files.Journal)&&s.Read("startup-paused.txt")!=null,"shutdown reset failure retains recovery and pauses startup");
+  s=Enabled();int resetCalls=0;clean=SessionShutdown.Finish(true,()=>resetCalls++,why=>StartupPolicy.Block(s,why));
+  Check(!clean&&resetCalls==0&&s.Read("startup-paused.txt")!=null,"shutdown during GPU work never races a reset");
+  s=Enabled();using(ManualResetEvent release=new ManualResetEvent(false)){var finished=new ManualResetEvent(false);clean=SessionShutdown.Finish(false,()=>{release.WaitOne();finished.Set();},why=>StartupPolicy.Block(s,why),30);Check(!clean&&s.Read("startup-paused.txt")!=null,"stalled driver cleanup is bounded and pauses startup");release.Set();finished.WaitOne(1000);finished.Dispose();}
+  File.Delete(Files.Journal);
+  // Exercise Windows message routing on a preview form, never a real GPU.
+  using(MainForm f=new MainForm(false,true)){
+   var method=typeof(MainForm).GetMethod("WndProc",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+   Files.Write("recovery.txt","cancelled|GPU-fake|8");
+   object[] query={Message.Create(IntPtr.Zero,0x11,IntPtr.Zero,IntPtr.Zero)};method.Invoke(f,query);
+   Check(((Message)query[0]).Result==new IntPtr(1)&&File.Exists(Files.Journal),"shutdown query accepts without clearing ownership");
+   object[] cancel={Message.Create(IntPtr.Zero,0x16,IntPtr.Zero,IntPtr.Zero)};method.Invoke(f,cancel);
+   Check(File.Exists(Files.Journal)&&!(bool)typeof(MainForm).GetField("closing",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(f),"cancelled Windows shutdown keeps app and recovery ownership intact");
+   g=new FakeGpu();typeof(MainForm).GetField("gpu",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(f,g);
+   Files.Write("startup.enabled","1");if(File.Exists(Files.PathFor("startup-paused.txt")))File.Delete(Files.PathFor("startup-paused.txt"));
+   object[] end={Message.Create(IntPtr.Zero,0x16,new IntPtr(1),IntPtr.Zero)};method.Invoke(f,end);
+   Check(!File.Exists(Files.Journal)&&g.UnlockCalls==1&&File.Exists(Files.PathFor("startup.enabled"))&&!File.Exists(Files.PathFor("startup-paused.txt")),"actual end-session message resets fake GPU without disabling startup or pausing");
+  }
   Console.WriteLine("TOTAL "+count+" checks passed. No real GPU setter was called.");
  }
 }

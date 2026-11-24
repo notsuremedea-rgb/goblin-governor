@@ -15,6 +15,22 @@ public static class Files {
  public static int Mask(){if(!File.Exists(Journal))return 0;string[] a=File.ReadAllText(Journal).Split('|');if(a.Length!=3)throw new Exception("Invalid recovery record");int m=int.Parse(a[2]);if(m<1||m>15)throw new Exception("Invalid recovery controls");return m;}
  public static void Recover(){Recover(uuid=>new Nvidia(uuid));} public static void Recover(Func<string,IGpu> connect){if(!File.Exists(Journal))return;StartupPolicy.Block(StartupPolicy.Store,"Recovery was required. Manually apply and confirm before automatic startup resumes.");string[] a=File.ReadAllText(Journal).Split('|');int m=Mask();using(IGpu gpu=connect(a[1]))ControlLogic.Reset(gpu,m);File.Delete(Journal);Log("Recovery reset verified.");}
 }
+public static class SessionShutdown {
+ public static bool Finish(bool operationInProgress,Action reset,Action<string> pause,int timeoutMs=2000){
+  try{
+   if(operationInProgress)throw new Exception("GPU operation was still in progress at Windows shutdown.");
+   // Finish ownership cleanup before returning WM_ENDSESSION to Windows.
+   // Native driver calls may stall; never hold shutdown indefinitely.
+   var work=System.Threading.Tasks.Task.Run(reset);
+   if(!work.Wait(timeoutMs))throw new Exception("Windows shutdown reset timed out.");
+   Files.Log("Windows session ending: owned settings reset; startup preference preserved.");
+   return true;
+  }catch(Exception e){
+   string why="Shutdown cleanup incomplete: "+e.GetBaseException().Message;
+   pause(why);Files.Log(why);return false;
+  }
+ }
+}
 public sealed class Watchdog : IDisposable {
  Process child; readonly string token=Guid.NewGuid().ToString("N");
  public bool Healthy {get{return child!=null&&!child.HasExited;}}
